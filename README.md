@@ -20,3 +20,9 @@ This project is a Python function that generates step-by-step meditation instruc
    ```bash
    git clone https://github.com/yourusername/meditation-instructions-generator.git
    cd meditation-instructions-generator
+   
+2. Prerequisites
+
+- Install required Python packages by running:
+  ```bash
+  pip install openai
