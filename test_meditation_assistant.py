@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 import json
 import asyncio
-from meditation_assistant import generate_instructions, AllMeditationPrompts
+from meditation_assistant import generate_instructions, AllMeditationPrompts, Instructions, Instruction
 
 class TestMeditationAssistant(unittest.IsolatedAsyncioTestCase):
 
@@ -12,14 +12,17 @@ class TestMeditationAssistant(unittest.IsolatedAsyncioTestCase):
         mock_response = {
             'choices': [{
                 'message': {
-                    'function_call': {
-                        'arguments': json.dumps({
-                            "instructions": [
-                                {"text": "Sit comfortably", "pause": "5000"},
-                                {"text": "Take a deep breath", "pause": "3000"}
-                            ]
-                        })
-                    }
+                    'tool_calls': [{
+                        'function': {
+                            'name': 'generate_instruction_with_pause',
+                            'arguments': json.dumps({
+                                "instructions": [
+                                    {"text": "Sit comfortably", "pause": "5000"},
+                                    {"text": "Take a deep breath", "pause": "3000"}
+                                ]
+                            })
+                        }
+                    }]
                 }
             }]
         }
@@ -28,8 +31,9 @@ class TestMeditationAssistant(unittest.IsolatedAsyncioTestCase):
         prompt = "Test prompt"
         result = await generate_instructions(prompt)
         
+        self.assertIsInstance(result, dict)
         self.assertIn("instructions", result)
-        instructions = json.loads(result)["instructions"]
+        instructions = result["instructions"]
         self.assertEqual(len(instructions), 2)
         self.assertEqual(instructions[0]["text"], "Sit comfortably")
         self.assertEqual(instructions[0]["pause"], "5000")
@@ -40,7 +44,7 @@ class TestMeditationAssistant(unittest.IsolatedAsyncioTestCase):
         mock_response = {
             'choices': [{
                 'message': {
-                    'refusal': "Unable to generate instructions"
+                    'content': "Unable to generate instructions"
                 }
             }]
         }
@@ -50,7 +54,7 @@ class TestMeditationAssistant(unittest.IsolatedAsyncioTestCase):
         result = await generate_instructions(prompt)
         
         self.assertIn("error", result)
-        self.assertEqual(result["error"], "Unable to generate instructions")
+        self.assertEqual(result["error"], "No valid tool call made.")
 
     # Test for unexpected response
     @patch('meditation_assistant.openai.ChatCompletion.create')
@@ -68,13 +72,13 @@ class TestMeditationAssistant(unittest.IsolatedAsyncioTestCase):
         result = await generate_instructions(prompt)
         
         self.assertIn("error", result)
-        self.assertEqual(result["error"], "No function call made.")
+        self.assertEqual(result["error"], "No valid tool call made.")
 
     # Test for prompt formatting
     def test_mindful_meditation_prompt(self):
         duration = 45000
         focus_area = 'relaxation'
-        expected_prompt = f"Give me a step-by-step guide on how to do relaxation type meditation. The duration of the medation will be 45000 milliseconds. Add pauses after each instructions as you see fit. Make sure to give simple and easy to understand instructions. Do not include jargon."
+        expected_prompt = f"Give me a step-by-step guide on how to do relaxation type meditation. The duration of the meditation will be 45000 milliseconds. Add pauses after each instruction as you see fit. Make sure to give simple and easy to understand instructions. Do not include jargon."
         
         formatted_prompt = AllMeditationPrompts.mindful_meditation_prompt.format(
             duration=duration, 
@@ -89,8 +93,10 @@ class TestMeditationAssistant(unittest.IsolatedAsyncioTestCase):
         mock_create.side_effect = ValueError("Invalid input")
 
         prompt = "Invalid prompt"
-        with self.assertRaises(ValueError):
-            await generate_instructions(prompt)
+        result = await generate_instructions(prompt)
+        
+        self.assertIn("error", result)
+        self.assertTrue(result["error"].startswith("Unexpected error:"))
 
 if __name__ == '__main__':
     unittest.main()
